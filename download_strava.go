@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"reflect"
 	"regexp"
 	"strconv"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// generated via https://mholt.github.io/json-to-go/
 type StravaActivities []struct {
 	ResourceState int `json:"resource_state"`
 	Athlete       struct {
@@ -80,12 +80,11 @@ type StravaActivities []struct {
 
 const dataDirectory = "data/strava"
 
-// hard-coded for now
-const tokenType = "Bearer"
 var accessToken = ""
 var refreshToken = ""
-const timeLayout = "2006-01-02 15:04:05 -0700"
 
+// determine the most recent activity timestamp by listing matching
+// files in `dataDirectory`
 func latestActivityTimestamp() time.Time {
 	r, err := regexp.Compile("activity-([0-9]+).json")
 	if err != nil {
@@ -99,10 +98,8 @@ func latestActivityTimestamp() time.Time {
 	}
 
 	for _, file := range files {
-		// fmt.Println(file.Name())
 		timestampString := r.FindStringSubmatch(file.Name())
 		if len(timestampString) < 1 {
-			fmt.Printf("Skipping file %s\n", file.Name())
 			continue
 		}
 
@@ -114,17 +111,14 @@ func latestActivityTimestamp() time.Time {
 
 	}
 	latestTime := time.Unix(latestTimestamp, 0)
-	log.Printf("latest activity is %s (%d)", latestTime.String(), latestTimestamp)
 	return latestTime
 }
 
-func downloadMissingActivities(latestTimestamp time.Time) {
-	endpoint := fmt.Sprintf("https://www.strava.com/api/v3/athlete/activities?after=%d&per_page=50", latestTimestamp.Unix())
-
-	fmt.Printf("fetching activities from %s", endpoint)
+func fetchFromStrava(endpoint string) ([]byte, error) {
+	log.Printf("fetching %s", endpoint)
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	authorization := "Bearer " + accessToken
 	req.Header.Set("Content-Type", "application/json")
@@ -132,25 +126,43 @@ func downloadMissingActivities(latestTimestamp time.Time) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
+
+	statusCode := resp.StatusCode
+	if statusCode == http.StatusUnauthorized {
+		log.Fatalln("Strava response=unauthorized - check your STRAVA_ACCESS_TOKEN")
+	} else if statusCode != http.StatusOK {
+		log.Fatalf("Strava response=%d", statusCode)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func downloadMissingActivities(latestTimestamp time.Time) {
+	endpoint := fmt.Sprintf("https://www.strava.com/api/v3/athlete/activities?after=%d&per_page=50", latestTimestamp.Unix())
+
+	body, err := fetchFromStrava(endpoint)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	data := StravaActivities{}
-
 	err = json.Unmarshal(body, &data)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("received %d activities", len(data))
-	log.Print(reflect.TypeOf(data))
-	log.Print(reflect.TypeOf(len(data)))
 
-	for i, activity := range data {
+	for _, activity := range data {
 		timestamp := activity.StartDate.Unix()
 		outfile := fmt.Sprintf("%s/activity-%d.json", dataDirectory, timestamp)
-		log.Printf("saving activity %d to %s", i, outfile)
+		// log.Printf("saving activity %d to %s", i, outfile)
 		json, err := json.MarshalIndent(activity, "", "  ")
 		if err != nil {
 			log.Fatalln(err)
@@ -160,9 +172,10 @@ func downloadMissingActivities(latestTimestamp time.Time) {
 			log.Fatalln(err)
 		}
 	}
-}
 
-// func saveActivitySummary()
+	timestamp := latestActivityTimestamp()
+	log.Printf("new latest activity is %s (%d)", timestamp.String(), timestamp.Unix())
+}
 
 func maybeRequestAthlete() {
 	athleteFile := path.Join(dataDirectory, "athlete.json")
@@ -177,23 +190,8 @@ func maybeRequestAthlete() {
 }
 
 func requestAthlete(athleteFile string) {
-	req, err := http.NewRequest("GET", "https://www.strava.com/api/v3/athlete", nil)
-
-	if err != nil {
-		log.Fatalln(err)
-
-	}
-	authorization := "Bearer " + accessToken
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", authorization)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	endpoint := "https://www.strava.com/api/v3/athlete"
+	body, err := fetchFromStrava(endpoint)
 
 	if err != nil {
 		log.Fatalln(err)
@@ -203,14 +201,10 @@ func requestAthlete(athleteFile string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-	  log.Fatal("Error loading .env file")
-	}
+	godotenv.Load()
 
 	accessToken = os.Getenv("STRAVA_ACCESS_TOKEN")
 	if accessToken == "" {
@@ -218,13 +212,9 @@ func main() {
 	}
 
 	log.Printf("STRAVA_ACCESS_TOKEN=%s", accessToken)
+	maybeRequestAthlete()
 
-
-	// fmt.Printf("hi %s\n", t)
-	// maybeRequestAthlete()
-	// if latestTimestamp == nil {
-	// 	latestTimestamp = time.Unix(0, 0)
-	// }
-	// timestamp := latestActivityTimestamp()
-	// downloadMissingActivities(timestamp)
+	timestamp := latestActivityTimestamp()
+	log.Printf("latest activity is %s (%d)", timestamp.String(), timestamp.Unix())
+	downloadMissingActivities(timestamp)
 }
