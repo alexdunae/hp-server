@@ -19,3 +19,9 @@ Define a `STRAVA_ACCESS_TOKEN` environment variable.
 ```
 go run download_strava.go
 ```
+
+## Building
+
+```
+CGO_ENABLED=1 go build
+```

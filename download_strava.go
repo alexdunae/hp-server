@@ -203,7 +203,7 @@ func requestAthlete(athleteFile string) {
 	}
 }
 
-func main() {
+func StartStravaSync() {
 	godotenv.Load()
 
 	accessToken = os.Getenv("STRAVA_ACCESS_TOKEN")
