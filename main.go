@@ -17,13 +17,16 @@ const migrationDirectory = "data/migrations"
 
 var migrationRegexp = regexp.MustCompile("([0-9]+)-([a-zA-Z0-9_-]+).sql")
 
+// https://www.alexedwards.net/blog/organising-database-access
+type Env struct {
+	db *sql.DB
+}
+
 func die(err error) {
 	log.Fatal(err.Error())
 }
 
-// TODO: how does Go like us passing database handles around?
-// where do we open and close our connection?
-func createDatabase() {
+func createDatabase() *Env {
 	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
 		log.Printf("creating database %s", dbFile)
 		file, err := os.Create(dbFile)
@@ -36,28 +39,36 @@ func createDatabase() {
 	}
 
 	// TODO: investigate connection modes https://github.com/mattn/go-sqlite3#connection-string
-	sqliteDatabase, _ := sql.Open("sqlite3", "./"+dbFile)
-	defer sqliteDatabase.Close()
-	if hasExistingTables(sqliteDatabase) == false {
-		err := bootstrapDatabase(sqliteDatabase)
+	db, err := sql.Open("sqlite3", "./"+dbFile)
+
+	if err != nil {
+		die(err)
+	}
+
+	env := &Env{db: db}
+
+	if hasExistingTables(env) == false {
+		err := bootstrapDatabase(env)
 		if err != nil {
 			die(err)
 		}
 	}
 
-	err := migrateDatabase(sqliteDatabase)
+	err = migrateDatabase(env)
 	if err != nil {
 		die(err)
 	}
+
+	return env;
 }
 
-func bootstrapDatabase(db *sql.DB) error {
+func bootstrapDatabase(env *Env) error {
 	sql := `CREATE TABLE schema_migrations
 				(migration_id INT PRIMARY KEY NOT NULL UNIQUE)
 				WITHOUT ROWID;
 		 	`
 
-	statement, err := db.Prepare(sql)
+	statement, err := env.db.Prepare(sql)
 	if err != nil {
 		return err
 	}
@@ -67,11 +78,11 @@ func bootstrapDatabase(db *sql.DB) error {
 	return nil
 }
 
-func hasExistingTables(db *sql.DB) bool {
+func hasExistingTables(env *Env) bool {
 	var table_name string
 
 	query := `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';`
-	rows, err := db.Query(query)
+	rows, err := env.db.Query(query)
 	defer rows.Close()
 	if err != nil {
 		die(err)
@@ -89,12 +100,12 @@ func hasExistingTables(db *sql.DB) bool {
 	return false
 }
 
-func getExistingMigrations(db *sql.DB) ([]string, error) {
+func getExistingMigrations(env *Env) ([]string, error) {
 	var migration_id string
 	var migration_ids []string
 
 	query := `SELECT * FROM schema_migrations ORDER BY migration_id ASC;`
-	rows, err := db.Query(query)
+	rows, err := env.db.Query(query)
 	defer rows.Close()
 	if err != nil {
 		return nil, err
@@ -123,13 +134,13 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func migrateDatabase(db *sql.DB) error {
+func migrateDatabase(env *Env) error {
 	files, err := ioutil.ReadDir(migrationDirectory)
 	if err != nil {
 		return err
 	}
 
-	existingMigrations, err := getExistingMigrations(db)
+	existingMigrations, err := getExistingMigrations(env)
 	if err != nil {
 		return err
 	}
@@ -147,7 +158,7 @@ func migrateDatabase(db *sql.DB) error {
 			} else {
 				log.Printf("- migrating %s      %s", matchString[1], matchString[2])
 				rawSQL, err := ioutil.ReadFile(sqlPath)
-				statement, err := db.Prepare(string(rawSQL))
+				statement, err := env.db.Prepare(string(rawSQL))
 				if err != nil {
 					return err
 				}
@@ -160,7 +171,7 @@ func migrateDatabase(db *sql.DB) error {
 				if err != nil {
 					die(err)
 				}
-				recordMigration(db, migration_id)
+				recordMigration(env, migration_id)
 			}
 		}
 	}
@@ -168,8 +179,8 @@ func migrateDatabase(db *sql.DB) error {
 	return nil
 }
 
-func recordMigration(db *sql.DB, migration_id int) {
-	statement, err := db.Prepare(fmt.Sprintf("INSERT INTO schema_migrations VALUES (%d);", migration_id))
+func recordMigration(env *Env, migration_id int) {
+	statement, err := env.db.Prepare(fmt.Sprintf("INSERT INTO schema_migrations VALUES (%d);", migration_id))
 	if err != nil {
 		die(err)
 	}
@@ -183,7 +194,8 @@ func recordMigration(db *sql.DB, migration_id int) {
 }
 
 func main() {
-	log.Println("= setup database =")
-	createDatabase()
+	log.Println("== setup database ==")
+	env := createDatabase()
+	defer env.db.Close()
 	// StartStravaSync()
 }
