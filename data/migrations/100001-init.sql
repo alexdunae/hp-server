@@ -1,5 +1,3 @@
-DROP TABLE IF EXISTS strava_activities;
-
 CREATE TABLE strava_activities (
     strava_id   BIGINT   PRIMARY KEY
                          NOT NULL
