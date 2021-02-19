@@ -59,7 +59,7 @@ func createDatabase() *Env {
 		die(err)
 	}
 
-	return env;
+	return env
 }
 
 func bootstrapDatabase(env *Env) error {
@@ -194,8 +194,10 @@ func recordMigration(env *Env, migration_id int) {
 }
 
 func main() {
+	// log.SetFlags(log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	log.Println("== setup database ==")
 	env := createDatabase()
 	defer env.db.Close()
-	// StartStravaSync()
+
+	SyncWithStrava(env)
 }

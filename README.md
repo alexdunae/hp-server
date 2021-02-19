@@ -15,9 +15,10 @@ Still sketching ideas. Still looking up almost _every_ bit of Go syntax.
 
 ## Running
 
-Define a `STRAVA_ACCESS_TOKEN` environment variable.
+Define the `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` environment variables.
+
 ```
-go run download_strava.go
+go run .
 ```
 
 ## Building
