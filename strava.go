@@ -221,8 +221,9 @@ func (s Strava) fetchFromAPI(endpoint string) ([]byte, error) {
 }
 
 func printRateLimit(resp *http.Response) {
-	// Strava returns to headers, each with two comma-separated ints
+	// Strava returns two headers, each with two comma-separated integers
 	// representing the 15min and daily totals
+	// see http://developers.strava.com/docs/rate-limits/
 	rateLimitsTotal := resp.Header.Get("X-Ratelimit-Limit")
 	rateLimitsUsed := resp.Header.Get("X-Ratelimit-Usage")
 
