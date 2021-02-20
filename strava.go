@@ -157,29 +157,32 @@ func (s *Strava) Connect(env *Env) error {
 
 	tok := s.retrieveStoredCredentials(env)
 
-	if tok == nil {
-		c := make(chan string)
-		go listenForCode(c)
-
-		url := conf.AuthCodeURL(oauthState, oauth2.AccessTypeOnline)
-		log.Printf("Visit this URL to connect to Strava:\n  %v", url)
-
-		code := <-c
-		log.Printf("Got code... %s", code)
-
-		tok, err := conf.Exchange(ctx, code)
-		if err != nil {
-			return err
-		}
-		log.Printf("got token! %v", tok)
-
-		raw_json, err := json.Marshal(tok)
-		if err != nil {
-			return err
-		}
-		saveCredentials(env, "strava", string(raw_json), tok.Expiry)
+	if tok != nil {
+		s.httpClient = conf.Client(ctx, tok)
+		return nil
 	}
 
+
+	c := make(chan string)
+	go listenForCode(c)
+
+	url := conf.AuthCodeURL(oauthState, oauth2.AccessTypeOnline)
+	log.Printf("Visit this URL to connect to Strava:\n  %v", url)
+
+	code := <-c
+	log.Printf("Got code... %s", code)
+
+	tok, err := conf.Exchange(ctx, code)
+	if err != nil {
+		return err
+	}
+	log.Printf("got token! %v", tok)
+
+	raw_json, err := json.Marshal(tok)
+	if err != nil {
+		return err
+	}
+	saveCredentials(env, "strava", string(raw_json), tok.Expiry)
 	s.httpClient = conf.Client(ctx, tok)
 	return nil
 }
@@ -282,7 +285,7 @@ func (s Strava) DownloadActivities(env *Env, latestTimestamp time.Time) error {
 		latestTimestamp = time.Unix(0, 0)
 	}
 	log.Printf("downloading activities after=%v", latestTimestamp)
-	endpoint := fmt.Sprintf("https://www.strava.com/api/v3/athlete/activities?after=%d&per_page=50", latestTimestamp.Unix())
+	endpoint := fmt.Sprintf("https://www.strava.com/api/v3/athlete/activities?after=%d&per_page=100", latestTimestamp.Unix())
 
 	body, err := s.fetchFromAPI(endpoint)
 	if err != nil {
