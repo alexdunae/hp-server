@@ -206,6 +206,8 @@ func main() {
 
 	if cmd == "stats" {
 		RenderStats(env)
+	} else if cmd == "milestone" {
+		RecordMilestone(env)
 	} else if cmd == "import" {
 		SyncWithStrava(env)
 	} else {
