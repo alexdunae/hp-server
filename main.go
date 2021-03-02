@@ -199,5 +199,21 @@ func main() {
 	env := createDatabase()
 	defer env.db.Close()
 
-	SyncWithStrava(env)
+	cmd := "stats"
+	if len(os.Args) >= 2 {
+		cmd = os.Args[1]
+	}
+
+	if cmd == "stats" {
+		RenderStats(env)
+	} else if cmd == "import" {
+		SyncWithStrava(env)
+	} else {
+		log.Println("Please enter a supported command")
+		log.Printf(" entered %v", cmd)
+		log.Println("  import          Import from Strava")
+		log.Println("  stats           Print stats (default)")
+		os.Exit(1)
+	}
+
 }
