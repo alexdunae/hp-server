@@ -247,8 +247,8 @@ func (s Strava) SaveActivity(env *Env, activity StravaActivity) error {
 	raw_json, err := json.Marshal(activity)
 
 	statement, err := env.db.Prepare(`
-	INSERT INTO strava_activities (remote_id, external_id, name, data, started_on, created_at, updated_at) VALUES (
-		?, ?, ?, ?, ?, datetime('now'), datetime('now')
+	INSERT INTO strava_activities (remote_id, external_id, name, activity_type, data, started_on, created_at, updated_at) VALUES (
+		?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')
 	) ON CONFLICT(remote_id) DO UPDATE SET
 		data = ?,
 		started_on = ?,
@@ -260,7 +260,7 @@ func (s Strava) SaveActivity(env *Env, activity StravaActivity) error {
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec(activity.ID, activity.ExternalID, activity.Name, raw_json, activity.StartDate, raw_json, activity.StartDate)
+	_, err = statement.Exec(activity.ID, activity.ExternalID, activity.Name, activity.Type, raw_json, activity.StartDate, raw_json, activity.StartDate)
 
 	if err != nil {
 		return err
