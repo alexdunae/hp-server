@@ -210,6 +210,8 @@ func main() {
 		RecordMilestone(env)
 	} else if cmd == "import" {
 		SyncWithStrava(env)
+	} else if cmd == "server" {
+		StartServer(env)
 	} else {
 		log.Println("Please enter a supported command")
 		log.Printf(" entered %v", cmd)
